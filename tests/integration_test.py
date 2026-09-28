@@ -13,7 +13,6 @@ import io
 import json
 import os
 from pathlib import Path
-import ssl
 import subprocess
 import sys
 import tempfile
@@ -146,6 +145,18 @@ class InstalledStackTests(unittest.TestCase):
         self.assertEqual(request(base + "/api/connections?interval=0", credentials=self.auth)[0], 200)
         self.assertEqual(request(base + "/api/version", credentials=self.auth)[0], 200)
 
+    def test_04_tls_rejects_untrusted_certificates_and_wrong_ip(self):
+        base_args = ["curl", "--silent", "--show-error", "--max-time", "15", "--noproxy", "*"]
+        untrusted = system.run(base_args + [
+            "--resolve", "1.1.1.1:8443:127.0.0.1", "https://1.1.1.1:8443/",
+        ], check=False)
+        self.assertEqual(untrusted.returncode, 60, "Self-signed test CA must not be trusted implicitly")
+        wrong_ip = system.run(base_args + [
+            "--cacert", system.CERT / "fullchain.pem",
+            "--resolve", "8.8.8.8:8443:127.0.0.1", "https://8.8.8.8:8443/",
+        ], check=False)
+        self.assertEqual(wrong_ip.returncode, 60, "A trusted certificate must still match its IP SAN")
+
     def test_05_vless_reality_authenticated_proxy_works(self):
         client = {
             "log": {"level": "error"},
@@ -173,9 +184,15 @@ class InstalledStackTests(unittest.TestCase):
                     result = system.run([
                         "curl", "--fail", "--silent", "--show-error", "--max-time", "30",
                         "--noproxy", "", "--proxy", "http://127.0.0.1:17891",
-                        "https://www.google.com/generate_204", "--write-out", "%{http_code}",
+                        "https://www.gstatic.com/generate_204", "--write-out", "%{http_code}",
                     ])
                     self.assertEqual(result.stdout, "204")
+                    blocked = system.run([
+                        "curl", "--silent", "--show-error", "--max-time", "10",
+                        "--noproxy", "", "--proxy", "http://127.0.0.1:17891",
+                        "http://127.0.0.1:80/", "--write-out", "%{http_code}",
+                    ], check=False)
+                    self.assertNotEqual(blocked.returncode, 0, "The authenticated proxy must reject loopback destinations")
                 finally:
                     process.terminate()
                     try:
@@ -216,4 +233,7 @@ class InstalledStackTests(unittest.TestCase):
 
 if __name__ == "__main__":
     require_disposable_runner()
+    # The download bootstrap sets this; directories must still be traversable
+    # by the dedicated VPN account and nginx workers after installation.
+    os.umask(0o077)
     unittest.main(verbosity=2)
