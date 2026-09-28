@@ -2,7 +2,7 @@
 set -euo pipefail
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 VERSION='1.0.0'
-APP_SHA256='363dacfb5993602528474fbdef2d249f25f17cd373b5f9b40186cca5d5d2391f'
+APP_SHA256='2475b8bda73d93400fb0a1952beb2ba7810b200f3762dadea69e8825bc00e75a'
 
 for arg in "$@"; do
   if [[ "$arg" == '--help' || "$arg" == '-h' ]]; then

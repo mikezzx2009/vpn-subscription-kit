@@ -235,6 +235,8 @@ def install_app():
         for name in ('vpnkit', 'assets'):
             shutil.copytree(SOURCE / name, target / name, dirs_exist_ok=True,
                             ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+        for name in ('LICENSE', 'THIRD_PARTY.md'):
+            shutil.copyfile(SOURCE / name, target / name)
     atomic_write('/usr/local/bin/vpnkit',
                  '#!/bin/sh\ncd /opt/vpnkit/app\nexec /usr/bin/python3 -m vpnkit "$@"\n', 0o755)
 
@@ -244,7 +246,7 @@ def make_directories():
     try:
         account = pwd.getpwnam('vpnkit')
     except KeyError:
-        run(['useradd', '--system', '--no-create-home', '--shell', '/usr/sbin/nologin', 'vpnkit'])
+        run(['useradd', '--system', '--user-group', '--no-create-home', '--shell', '/usr/sbin/nologin', 'vpnkit'])
         account = pwd.getpwnam('vpnkit')
     ETC.mkdir(mode=0o750, parents=True, exist_ok=True)
     os.chmod(ETC, 0o750)

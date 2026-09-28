@@ -1,5 +1,7 @@
 # VPN Subscription Kit
 
+[![Tests](https://github.com/mikezzx2009/vpn-subscription-kit/actions/workflows/test.yml/badge.svg)](https://github.com/mikezzx2009/vpn-subscription-kit/actions/workflows/test.yml)
+
 在一台新的 Linux 云服务器上部署 VLESS + REALITY + Vision，并生成 **FlClash 和 Shadowrocket 可直接导入的 HTTPS 订阅 URL**。无需购买域名；可选安装查看活动来源 IP、连接数和流量的监控面板。
 
 ## 支持范围
@@ -130,3 +132,11 @@ sing-box 使用官方发行文件并校验固定的 SHA-256。公开仓库仅保
 遇到超时、订阅下载失败或换 IP 问题，先运行 `sudo vpnkit doctor`，再查看[故障排查](docs/troubleshooting.md)。提交反馈前请按[安全说明](SECURITY.md)隐藏订阅路径、UUID、密钥和密码。
 
 本项目的安装和配置代码采用 [MIT License](LICENSE)；上游组件按各自许可证分发，详见 [第三方组件说明](THIRD_PARTY.md)。
+
+## 验证与开发
+
+本地运行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`。GitHub Actions 在临时 Ubuntu 22.04、24.04 和 24.04 ARM64 服务器中执行实际安装，检查 HTTPS 订阅、真实 VLESS REALITY 代理连接、监控权限、重复安装和换 IP。
+
+CI 用本地测试 CA 替代公网 ACME 签发，并严格验证 TLS；正式安装使用 Let's Encrypt。CI 不能代替目标服务器的公网端口和客户端网络可达性检查。破坏性集成脚本仅允许在明确标记的 GitHub 托管临时环境中运行。
+
+维护者运行 `python3 scripts/package.py` 生成发行包和 SHA-256，并将校验值写入 `install.sh`。发布时必须将同一次构建的脚本、Git 标签和 `dist/` 发行附件一起发布；版本发布后不要移动标签或替换附件。

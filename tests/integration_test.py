@@ -13,6 +13,7 @@ import io
 import json
 import os
 from pathlib import Path
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -48,7 +49,7 @@ def fake_issue_certificate(ip):
     os.chmod(system.CERT / "privkey.pem", 0o600)
 
 
-def request(url, *, credentials=None, method="GET"):
+def request(url, *, credentials=None, method="GET", headers=None):
     parsed = urlsplit(url)
     args = [
         "curl", "--silent", "--show-error", "--max-time", "15", "--noproxy", "*",
@@ -58,6 +59,8 @@ def request(url, *, credentials=None, method="GET"):
     ]
     if credentials:
         args += ["--user", credentials]
+    for key, value in (headers or {}).items():
+        args += ["--header", f"{key}: {value}"]
     result = system.run(args + [url])
     body, status = result.stdout.rsplit("\n", 1)
     return int(status), body
@@ -144,6 +147,11 @@ class InstalledStackTests(unittest.TestCase):
         # sing-box must not receive the caller's unsafe websocket interval.
         self.assertEqual(request(base + "/api/connections?interval=0", credentials=self.auth)[0], 200)
         self.assertEqual(request(base + "/api/version", credentials=self.auth)[0], 200)
+        self.assertEqual(request(base + "/api/connections", credentials=self.auth,
+                                 headers={"Origin": base})[0], 200)
+        self.assertEqual(request(base + "/api/connections", credentials=self.auth,
+                                 headers={"Origin": "https://example.net", "Upgrade": "websocket",
+                                          "Connection": "Upgrade"})[0], 403)
 
     def test_04_tls_rejects_untrusted_certificates_and_wrong_ip(self):
         base_args = ["curl", "--silent", "--show-error", "--max-time", "15", "--noproxy", "*"]
@@ -187,12 +195,29 @@ class InstalledStackTests(unittest.TestCase):
                         "https://www.gstatic.com/generate_204", "--write-out", "%{http_code}",
                     ])
                     self.assertEqual(result.stdout, "204")
-                    blocked = system.run([
-                        "curl", "--silent", "--show-error", "--max-time", "10",
-                        "--noproxy", "", "--proxy", "http://127.0.0.1:17891",
-                        "http://127.0.0.1:80/", "--write-out", "%{http_code}",
-                    ], check=False)
-                    self.assertNotEqual(blocked.returncode, 0, "The authenticated proxy must reject loopback destinations")
+                    marker = "vpnkit-loopback-sentinel-" + secrets.token_hex(16)
+                    challenge_dir = system.DATA / "acme/.well-known/acme-challenge"
+                    challenge_dir.mkdir(parents=True, exist_ok=True)
+                    os.chmod(challenge_dir.parent, 0o755)
+                    os.chmod(challenge_dir, 0o755)
+                    probe = challenge_dir / "ci-loopback-probe"
+                    probe.write_text(marker)
+                    os.chmod(probe, 0o644)
+                    probe_url = "http://127.0.0.1/.well-known/acme-challenge/ci-loopback-probe"
+                    try:
+                        direct = system.run([
+                            "curl", "--fail", "--silent", "--show-error", "--max-time", "10",
+                            "--noproxy", "*", probe_url,
+                        ])
+                        self.assertEqual(direct.stdout, marker)
+                        blocked = system.run([
+                            "curl", "--fail", "--silent", "--show-error", "--max-time", "10",
+                            "--noproxy", "", "--proxy", "http://127.0.0.1:17891", probe_url,
+                        ], check=False)
+                        self.assertNotEqual(blocked.returncode, 0, "Proxy must reject the reachable loopback destination")
+                        self.assertNotIn(marker, blocked.stdout)
+                    finally:
+                        probe.unlink(missing_ok=True)
                 finally:
                     process.terminate()
                     try:
@@ -200,6 +225,17 @@ class InstalledStackTests(unittest.TestCase):
                     except subprocess.TimeoutExpired:
                         process.kill()
                         process.wait(timeout=5)
+
+    def test_06_doctor_detects_wrong_certificate_ip(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            system.doctor()
+        wrong_state = dict(self.state, server_ip="8.8.8.8")
+        with patch.object(system, "load_state", return_value=wrong_state):
+            with contextlib.redirect_stdout(io.StringIO()) as captured:
+                with self.assertRaisesRegex(RuntimeError, "health checks failed"):
+                    system.doctor()
+        self.assertIn("FAIL: certificate IP matches", captured.getvalue())
+        self.assertEqual(system.load_state()["server_ip"], "1.1.1.1")
 
     def test_90_repeated_install_preserves_credentials_and_urls(self):
         saved_state = (system.ETC / "state.json").read_bytes()

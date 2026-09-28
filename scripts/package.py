@@ -19,8 +19,10 @@ def main():
     build.mkdir(exist_ok=True)
     stream = io.BytesIO()
     with tarfile.open(fileobj=stream, mode='w', format=tarfile.USTAR_FORMAT) as archive:
-        for directory in ('vpnkit', 'assets'):
-            for source in sorted((ROOT / directory).rglob('*')):
+        for directory in ('vpnkit', 'assets', 'LICENSE', 'THIRD_PARTY.md'):
+            selected = ROOT / directory
+            sources = [selected] if selected.is_file() else sorted(selected.rglob('*'))
+            for source in sources:
                 if not source.is_file() or '__pycache__' in source.parts or source.suffix == '.pyc':
                     continue
                 if source.is_symlink():
