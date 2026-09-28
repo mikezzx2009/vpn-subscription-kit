@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>VPN 节点 · 在线监控</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0a101a;--panel:#111b29;--line:#243146;--text:#eaf0fa;--muted:#9dacbf;--accent:#74e0bc;--warn:#ffd080;--bad:#ff9d9d}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top right,#102a34 0,transparent 46%),var(--bg);color:var(--text);font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;min-height:100vh}a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}button,a{touch-action:manipulation}a:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+    main{max-width:1160px;padding:42px 28px 28px;margin:auto}.eyebrow{font-size:12px;letter-spacing:.14em;color:var(--accent);font-weight:650;margin:0 0 8px}header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:28px}h1{font-size:30px;letter-spacing:-.03em;line-height:1.3;margin:0 0 9px}header p{margin:0;color:var(--muted)}.header-links{display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0}.button{border:1px solid var(--line);border-radius:9px;background:#162233;padding:9px 14px;color:var(--text);font:inherit;font-size:13px;cursor:pointer}.button:hover{border-color:#48607a;background:#1a2a3e;text-decoration:none}.button:disabled{opacity:.45;cursor:wait}
+    .status-bar{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#101b29;border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin-bottom:20px}.state{display:flex;align-items:center;gap:10px;min-width:0}.dot{width:8px;height:8px;flex-shrink:0;border-radius:50%;background:var(--muted)}.status-bar[data-state="live"] .dot{background:var(--accent);box-shadow:0 0 12px #74e0bc44}.status-bar[data-state="stale"] .dot{background:var(--warn)}.status-bar[data-state="error"] .dot{background:var(--bad)}.status-bar[data-state="stale"] #status-label{color:var(--warn)}.status-bar[data-state="error"] #status-label{color:var(--bad)}#status-label{font-size:14px;font-weight:600}.update-time{font-size:12px;color:var(--muted);text-align:right;white-space:nowrap}.status-detail{color:var(--muted);font-size:12px;margin:2px 0 0 18px}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:0 0 28px}.metric{padding:23px 21px 19px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(150deg,#152334,var(--panel))}.metric.primary{border-color:#3b756b;background:linear-gradient(145deg,#14302f,#132330)}.metric dt{color:var(--muted);font-size:13px}.metric dd{font-size:36px;font-weight:650;letter-spacing:-.04em;line-height:1.3;font-variant-numeric:tabular-nums;margin:10px 0 8px;white-space:nowrap}.metric.primary dd{color:var(--accent)}.metric dd small{font-size:16px;letter-spacing:0;margin-left:5px;font-weight:500}.metric p{font-size:12px;color:var(--muted);margin:0}.metric .data-value{transition:opacity .15s}.data-stale .data-value{opacity:.7}
+    .table-panel{border:1px solid var(--line);border-radius:13px;background:var(--panel);overflow:hidden}.panel-heading{padding:21px 23px 17px;display:flex;align-items:flex-start;justify-content:space-between;gap:16px}h2{font-size:17px;margin:0 0 4px;font-weight:600}.panel-heading p{font-size:12px;color:var(--muted);margin:0}.live-tag{color:var(--muted);font-size:11px;border:1px solid var(--line);padding:4px 9px;border-radius:20px;white-space:nowrap}.table-scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:14px;text-align:left}thead{background:#142031;color:var(--muted);font-size:12px}th{font-weight:500;padding:12px 23px}td{padding:15px 23px;border-top:1px solid #1e2b3d;font-variant-numeric:tabular-nums}td.ip{font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-wrap:anywhere}th:not(:first-child),td:not(:first-child){text-align:right;white-space:nowrap}tbody tr:hover{background:#172435}.empty{padding:42px 20px;text-align:center;color:var(--muted);font-size:14px}.table-footer{color:var(--muted);border-top:1px solid var(--line);padding:12px 23px;font-size:12px}.notes{padding:23px 2px 0;color:var(--muted);font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:28px}.notes h3{color:#c7d4e4;font-size:13px;font-weight:600;margin:0 0 5px}.notes p{margin:0}.footer{border-top:1px solid var(--line);margin-top:25px;padding-top:17px;display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px}.footer a{color:var(--muted)}
+    @media(max-width:850px){main{padding:28px 20px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}header{align-items:flex-start;flex-direction:column}.header-links{align-self:flex-start}.metric dd{font-size:34px}.notes{gap:20px}.update-time{white-space:normal}}
+    @media(max-width:480px){main{padding:24px 14px}h1{font-size:26px}.metrics{gap:10px}.metric{padding:18px 15px}.metric dd{font-size:29px}.metric dd small{font-size:13px}.status-bar{padding:13px 14px;align-items:flex-start}.status-detail{max-width:230px}.update-time{max-width:110px}.panel-heading{padding:18px 16px}th,td{padding:12px 16px}table{min-width:530px}.notes{grid-template-columns:1fr;gap:16px}.table-footer{padding:12px 16px}.footer{margin-top:20px}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">VPN SUBSCRIPTION KIT</p>
+        <h1>VPN 节点 · 在线监控</h1>
+        <p>按来源 IP 汇总当前正在转发的 VPN 连接。</p>
+      </div>
+      <div class="header-links">
+        <a class="button" href="/#/connections">打开 MetaCubeXD ↗</a>
+        <button class="button" id="refresh" type="button">立即刷新</button>
+      </div>
+    </header>
+
+    <section class="status-bar" id="status" data-state="loading" aria-label="数据状态">
+      <div>
+        <div class="state" role="status" aria-live="polite"><span class="dot" aria-hidden="true"></span><span id="status-label">正在获取数据</span></div>
+        <p class="status-detail" id="status-detail">每 2 秒自动刷新，离开此标签页时暂停。</p>
+      </div>
+      <div class="update-time" id="updated-at">尚无成功读取</div>
+    </section>
+
+    <div id="snapshot">
+      <dl class="metrics">
+        <div class="metric primary"><dt>活跃来源 IP</dt><dd class="data-value" id="ip-count">—</dd><p>去重后的公网来源，非人数</p></div>
+        <div class="metric"><dt>活动连接</dt><dd class="data-value" id="connection-count">—</dd><p>同一设备可能同时建立多条连接</p></div>
+        <div class="metric"><dt>当前连接已上传</dt><dd class="data-value" id="upload-total">—</dd><p>客户端 → 节点，当前连接累计</p></div>
+        <div class="metric"><dt>当前连接已下载</dt><dd class="data-value" id="download-total">—</dd><p>节点 → 客户端，当前连接累计</p></div>
+      </dl>
+
+      <section class="table-panel" aria-labelledby="sources-heading">
+        <div class="panel-heading">
+          <div><h2 id="sources-heading">来源 IP 概览</h2><p>仅包含已认证并进入转发的 VLESS REALITY 连接。</p></div>
+          <span class="live-tag">只读监控</span>
+        </div>
+        <div class="table-scroll">
+          <table aria-label="按来源 IP 汇总的当前连接" id="sources-table" hidden>
+            <thead><tr><th scope="col">来源 IP</th><th scope="col">活动连接</th><th scope="col">已上传</th><th scope="col">已下载</th></tr></thead>
+            <tbody id="sources-body"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="empty-state">连接到监控接口后显示实时数据。</div>
+        <div class="table-footer" id="table-footer">连接关闭后，该连接的流量会从此处移除；这些数值不是历史总流量。</div>
+      </section>
+    </div>
+
+    <section class="notes" aria-label="统计说明">
+      <div><h3>怎样理解“在线”</h3><p>这里统计当前有转发连接的来源 IP。客户端开启后如果处于闲置状态，可能显示 0。一个人可能使用多个 IP，同一网络也可能让多人共用一个 IP。</p></div>
+      <div><h3>共享账号的统计边界</h3><p>当前客户端共用节点账号，无法据此识别准确人数或设备数。本页不显示访问域名，不保存历史记录；接口失联时保留上次数据并标记过期。</p></div>
+    </section>
+    <footer class="footer"><span>sing-box · VLESS REALITY</span><span>详细面板：<a href="https://github.com/MetaCubeX/metacubexd" target="_blank" rel="noopener noreferrer">MetaCubeXD / GitHub ↗</a></span></footer>
+  </main>
+  <script>
+    'use strict';
+    (() => {
+      const $ = (id) => document.getElementById(id);
+      const intervalMs = 2000;
+      const inboundType = 'vless/vless-reality';
+      const numberFormat = new Intl.NumberFormat('zh-CN');
+      const timeFormat = new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+      let lastSuccess = null;
+      let inFlight = false;
+      let timer = null;
+      let controller = null;
+      let failure = false;
+
+      function bytes(value) {
+        const n = Number(value);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      }
+
+      function formatBytes(value) {
+        const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+        let amount = bytes(value);
+        let unit = 0;
+        while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
+        return { number: new Intl.NumberFormat('zh-CN', { maximumFractionDigits: unit === 0 ? 0 : 1 }).format(amount), unit: units[unit] };
+      }
+
+      function byteText(value) {
+        const formatted = formatBytes(value);
+        return formatted.number + ' ' + formatted.unit;
+      }
+
+      function setByteMetric(id, value) {
+        const formatted = formatBytes(value);
+        const unit = document.createElement('small');
+        unit.textContent = formatted.unit;
+        $(id).replaceChildren(document.createTextNode(formatted.number), unit);
+      }
+
+      function normalizeSource(value) {
+        if (typeof value !== 'string') return '';
+        const source = value.trim().toLowerCase().replace(/^\[(.*)\]$/, '$1');
+        return source.replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, '$1');
+      }
+
+      function state(kind, label, detail) {
+        $('status').dataset.state = kind;
+        $('status-label').textContent = label;
+        $('status-detail').textContent = detail;
+        $('snapshot').classList.toggle('data-stale', kind !== 'live' && lastSuccess !== null);
+        $('updated-at').textContent = lastSuccess === null ? '尚无成功读取' : '最后更新 ' + timeFormat.format(new Date(lastSuccess));
+      }
+
+      function render(data) {
+        if (data === null || typeof data !== 'object' || !Object.prototype.hasOwnProperty.call(data, 'connections')) throw new Error('invalid-data');
+        if (data.connections !== null && !Array.isArray(data.connections)) throw new Error('invalid-data');
+        const connections = (data.connections || []).filter((connection) => connection && connection.metadata && connection.metadata.type === inboundType);
+        const groups = new Map();
+        let upload = 0;
+        let download = 0;
+        let unknownSources = 0;
+        for (const connection of connections) {
+          const source = normalizeSource(connection.metadata.sourceIP);
+          const up = bytes(connection.upload);
+          const down = bytes(connection.download);
+          upload += up;
+          download += down;
+          if (!source) { unknownSources += 1; continue; }
+          const group = groups.get(source) || { source, count: 0, upload: 0, download: 0 };
+          group.count += 1;
+          group.upload += up;
+          group.download += down;
+          groups.set(source, group);
+        }
+
+        $('ip-count').textContent = numberFormat.format(groups.size);
+        $('connection-count').textContent = numberFormat.format(connections.length);
+        setByteMetric('upload-total', upload);
+        setByteMetric('download-total', download);
+        const rows = Array.from(groups.values()).sort((a, b) => b.count - a.count || b.download + b.upload - a.download - a.upload || a.source.localeCompare(b.source));
+        const fragment = document.createDocumentFragment();
+        for (const group of rows) {
+          const row = document.createElement('tr');
+          [group.source, numberFormat.format(group.count), byteText(group.upload), byteText(group.download)].forEach((value, index) => {
+            const cell = document.createElement('td');
+            if (index === 0) cell.className = 'ip';
+            cell.textContent = value;
+            row.appendChild(cell);
+          });
+          fragment.appendChild(row);
+        }
+        $('sources-body').replaceChildren(fragment);
+        $('sources-table').hidden = rows.length === 0;
+        $('empty-state').hidden = rows.length !== 0;
+        $('empty-state').textContent = connections.length === 0 ? '当前没有活动转发连接。客户端可能处于闲置状态。' : '当前连接未提供可识别的来源 IP。';
+        $('table-footer').textContent = (unknownSources ? numberFormat.format(unknownSources) + ' 条连接缺少来源 IP，未计入活跃来源 IP 数。' : '') + '连接关闭后，该连接的流量会从此处移除；这些数值不是历史总流量。';
+      }
+
+      function schedule() {
+        clearTimeout(timer);
+        if (!document.hidden) timer = setTimeout(refresh, intervalMs);
+      }
+
+      async function refresh() {
+        if (document.hidden || inFlight) return;
+        inFlight = true;
+        $('refresh').disabled = true;
+        controller = new AbortController();
+        const timeout = setTimeout(() => controller && controller.abort(), 8000);
+        try {
+          const response = await fetch('/api/connections', { credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }, signal: controller.signal });
+          if (!response.ok) throw new Error(response.status === 401 || response.status === 403 ? 'auth-error' : 'http-error');
+          const data = await response.json();
+          render(data);
+          lastSuccess = Date.now();
+          failure = false;
+          if (document.hidden) state('paused', '后台已暂停', '返回此标签页后立即刷新。以下为最后一次成功读取。');
+          else state('live', '实时更新中', '每 2 秒自动刷新，离开此标签页时暂停。');
+        } catch (error) {
+          if (document.hidden) {
+            state('paused', '后台已暂停', '返回此标签页后立即刷新。以下为最后一次成功读取。');
+          } else {
+            failure = true;
+            const detail = error.message === 'auth-error' ? '认证已失效，请刷新页面重新登录。' : '无法读取监控接口，正在自动重试；不会将失联误记为 0。';
+            state(lastSuccess === null ? 'error' : 'stale', lastSuccess === null ? '暂时无法获取数据' : '连接中断 · 数据已过期', detail);
+            if (lastSuccess === null) $('empty-state').textContent = '监控接口暂时不可用，尚无可显示的数据。';
+          }
+        } finally {
+          clearTimeout(timeout);
+          controller = null;
+          inFlight = false;
+          $('refresh').disabled = false;
+          schedule();
+        }
+      }
+
+      $('refresh').addEventListener('click', () => { clearTimeout(timer); refresh(); });
+      document.addEventListener('visibilitychange', () => {
+        clearTimeout(timer);
+        if (document.hidden) {
+          if (controller) controller.abort();
+          state('paused', '后台已暂停', '返回此标签页后立即刷新。以下为最后一次成功读取。');
+        } else {
+          if (lastSuccess !== null) state('stale', '正在刷新 · 上次数据', '正在重新读取最新连接状态。');
+          refresh();
+        }
+      });
+      setInterval(() => {
+        if (!document.hidden && !failure && lastSuccess !== null && Date.now() - lastSuccess > 6000) {
+          state('stale', '刷新延迟 · 数据已过期', '保留上次成功读取，正在尝试更新。');
+        }
+      }, 1000);
+      refresh();
+    })();
+  </script>
+</body>
+</html>
