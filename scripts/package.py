@@ -11,7 +11,7 @@ import re
 import tarfile
 
 ROOT = Path(__file__).resolve().parent.parent
-VERSION = '1.0.0'
+VERSION = '1.0.1'
 
 
 def main():

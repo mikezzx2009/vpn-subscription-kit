@@ -18,17 +18,17 @@
 先在云平台安全组 / 防火墙中放行上面的端口，然后执行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mikezzx2009/vpn-subscription-kit/v1.0.0/install.sh -o /tmp/vpnkit-install.sh && sudo bash /tmp/vpnkit-install.sh --accept-acme-tos
+curl -q -fsSL 'https://raw.githubusercontent.com/mikezzx2009/vpn-subscription-kit/v1.0.1/install.sh' -o /tmp/vpnkit-install.sh && sudo bash /tmp/vpnkit-install.sh --accept-acme-tos
 ```
 
-如果已经以 root 登录，可以省略 `sudo`。命令固定使用 `v1.0.0`，不会自动追踪开发分支。
+如果已经以 root 登录，可以省略 `sudo`。命令固定使用 `v1.0.1`，不会自动追踪开发分支。旧版 `v1.0.0` 存在系统版本变量覆盖下载地址的问题；若遇到 `curl: (3)`，请重新下载上述修正版脚本。
 
 **`--accept-acme-tos` 表示你同意 [Let's Encrypt ACME 服务条款](https://letsencrypt.org/repository/)**，安装器会向其申请公网 IP 的 HTTPS 证书，并配置自动续期。若不同意，请勿使用该参数或运行这条安装命令。
 
 要同时安装监控，在同一条命令末尾加上 `--with-monitor`：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mikezzx2009/vpn-subscription-kit/v1.0.0/install.sh -o /tmp/vpnkit-install.sh && sudo bash /tmp/vpnkit-install.sh --accept-acme-tos --with-monitor
+curl -q -fsSL 'https://raw.githubusercontent.com/mikezzx2009/vpn-subscription-kit/v1.0.1/install.sh' -o /tmp/vpnkit-install.sh && sudo bash /tmp/vpnkit-install.sh --accept-acme-tos --with-monitor
 ```
 
 也可显式指定公网 IP、节点名称和 REALITY 握手目标：

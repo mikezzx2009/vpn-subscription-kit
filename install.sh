@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
-VERSION='1.0.0'
+# /etc/os-release defines VERSION too; keep the package version separate.
+readonly VPNKIT_RELEASE_VERSION='1.0.1'
 APP_SHA256='2475b8bda73d93400fb0a1952beb2ba7810b200f3762dadea69e8825bc00e75a'
 
 for arg in "$@"; do
@@ -55,7 +56,7 @@ trap 'rm -rf -- "$workspace"' EXIT
 archive="$workspace/vpnkit.tar.gz"
 curl --fail --location --silent --show-error --retry 3 --connect-timeout 20 --max-time 300 \
   --proto '=https' --tlsv1.2 \
-  "https://github.com/mikezzx2009/vpn-subscription-kit/releases/download/v${VERSION}/vpnkit-v${VERSION}.tar.gz" \
+  "https://github.com/mikezzx2009/vpn-subscription-kit/releases/download/v${VPNKIT_RELEASE_VERSION}/vpnkit-v${VPNKIT_RELEASE_VERSION}.tar.gz" \
   -o "$archive"
 printf '%s  %s\n' "$APP_SHA256" "$archive" | sha256sum --check --status || {
   echo 'Installer archive checksum mismatch; stopped.' >&2; exit 1;

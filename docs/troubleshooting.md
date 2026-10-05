@@ -12,6 +12,14 @@ sudo vpnkit urls
 
 ## 安装前检查
 
+### v1.0.0 安装时出现 curl (3)
+
+若安装脚本已下载成功，执行后立即出现 `curl: (3) URL rejected: Malformed input to a URL function`，原因是 v1.0.0 读取 `/etc/os-release` 时，系统的 `VERSION` 覆盖了安装包版本变量，导致 GitHub 下载地址不合法。此时安装尚未进入 VPN 配置步骤。
+
+请使用 README 中的 v1.0.1 命令重新下载并执行安装脚本；只重跑本地旧脚本不会修复问题。v1.0.1 将安装包版本改为独立变量，并增加 Ubuntu / Debian 系统版本的回归测试。
+
+### 系统要求
+
 本项目支持 Ubuntu 22.04 / 24.04、Debian 12 / 13，amd64 / arm64 和 systemd。需要独立公网 IPv4；NAT 主机必须有对应端口映射，否则不适用。其他操作系统、IPv6-only 和无 systemd 的容器不受支持。
 
 如果提示没有 `curl`，请先通过发行版包管理器安装 `curl` 和 `ca-certificates`。如果已是 root 但没有 `sudo`，从安装命令中去掉 `sudo` 即可。
