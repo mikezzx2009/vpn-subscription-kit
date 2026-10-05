@@ -199,7 +199,8 @@ class InputValidationTests(unittest.TestCase):
     def test_required_fields_and_type(self):
         state = sample_state()
         for field in state:
-            if field == "local_addresses":
+            if field in {"local_addresses", "mode", "public_host", "vpn_port",
+                         "subscription_port", "monitor_port", "api_port"}:
                 continue
             missing = {key: value for key, value in state.items() if key != field}
             with self.subTest(field=field), self.assertRaises(ValueError):

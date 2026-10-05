@@ -60,3 +60,19 @@ jobs:
           persist-credentials: false
       - name: Test on this disposable runner with a local test CA
         run: sudo env VPNKIT_DISPOSABLE_CI=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 tests/integration_test.py
+
+  coexist:
+    name: Preserve existing website (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install alongside a running HTTP and HTTPS website
+        run: sudo env VPNKIT_DISPOSABLE_CI=1 GITHUB_ACTIONS="$GITHUB_ACTIONS" RUNNER_ENVIRONMENT="$RUNNER_ENVIRONMENT" /usr/bin/python3 tests/coexist_integration_test.py
