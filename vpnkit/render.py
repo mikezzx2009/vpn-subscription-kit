@@ -54,18 +54,24 @@ def _public_ipv4(value: object) -> str:
     return str(address)
 
 
-def _hostname(value: object) -> str:
-    value = _text(value, "handshake_host")
+def _hostname(value: object, field: str = "handshake_host") -> str:
+    value = _text(value, field)
     labels = value.split(".")
     if len(value) > 253 or len(labels) < 2 or any(
         not _HOST_LABEL.fullmatch(label) for label in labels
     ):
-        raise ValueError("handshake_host must be a lowercase ASCII DNS hostname")
+        raise ValueError(f"{field} must be a lowercase ASCII DNS hostname")
     try:
         ipaddress.ip_address(value)
     except ValueError:
         return value
-    raise ValueError("handshake_host must be a DNS hostname, not an IP address")
+    raise ValueError(f"{field} must be a DNS hostname, not an IP address")
+
+
+def _port(value: object, field: str, *, minimum: int = 1) -> int:
+    if type(value) is not int or not minimum <= value <= 65535:
+        raise ValueError(f"{field} must be an integer between {minimum} and 65535")
+    return value
 
 
 def _name(value: object) -> str:
@@ -149,6 +155,25 @@ def validate_state(state: Mapping) -> dict:
     clean["monitor_username"] = username
     clean["monitor_password"] = password
     clean["local_addresses"] = _local_addresses(state.get("local_addresses", []))
+    mode = state.get("mode", "standalone")
+    if mode not in ("standalone", "coexist"):
+        raise ValueError("mode must be standalone or coexist")
+    clean["mode"] = mode
+    public_host = state.get("public_host")
+    if mode == "coexist":
+        clean["public_host"] = _hostname(public_host, "public_host")
+    else:
+        if public_host is not None:
+            raise ValueError("public_host requires coexist mode")
+        clean["public_host"] = None
+    defaults = {"vpn_port": 443, "subscription_port": 8443, "monitor_port": 8444, "api_port": 19090}
+    for field, default in defaults.items():
+        clean[field] = _port(state.get(field, default), field, minimum=1024 if mode == "coexist" else 1)
+    ports = [clean[field] for field in defaults]
+    if len(set(ports)) != len(ports):
+        raise ValueError("VPN, subscription, monitoring and API ports must be distinct")
+    if 80 in ports:
+        raise ValueError("TCP port 80 is reserved for certificate validation")
     return clean
 
 
@@ -156,6 +181,9 @@ def new_state(
     server_ip: str, name: str = "My-VPN", handshake_host: str = "dl.google.com",
     *, private_key: str, public_key: str, uuid_value: str | None = None,
     local_addresses: Sequence[str] | None = None,
+    mode: str = "standalone", public_host: str | None = None,
+    vpn_port: int = 443, subscription_port: int = 8443,
+    monitor_port: int = 8444, api_port: int = 19090,
 ) -> dict:
     """Create deployment credentials once. Preserve this state on every rerun.
 
@@ -171,7 +199,14 @@ def new_state(
         "sr_token": secrets.token_urlsafe(32), "api_secret": secrets.token_urlsafe(32),
         "monitor_username": "admin", "monitor_password": secrets.token_urlsafe(24),
         "local_addresses": [] if local_addresses is None else list(local_addresses),
+        "mode": mode, "public_host": public_host,
+        "vpn_port": vpn_port, "subscription_port": subscription_port,
+        "monitor_port": monitor_port, "api_port": api_port,
     })
+
+
+def _public_host(state: dict) -> str:
+    return state["public_host"] or state["server_ip"]
 
 
 def _json(value: object) -> str:
@@ -190,7 +225,7 @@ def _sing_box(state: dict, with_monitor: bool) -> dict:
         "dns": {"servers": [{"type": "local", "tag": "local"}]},
         "inbounds": [{
             "type": "vless", "tag": "vless-reality", "listen": "0.0.0.0",
-            "listen_port": 443,
+            "listen_port": state["vpn_port"],
             "users": [{"name": "owner", "uuid": state["uuid"], "flow": "xtls-rprx-vision"}],
             "tls": {
                 "enabled": True, "server_name": state["handshake_host"],
@@ -213,8 +248,8 @@ def _sing_box(state: dict, with_monitor: bool) -> dict:
     }
     if with_monitor:
         config["experimental"] = {"clash_api": {
-            "external_controller": "127.0.0.1:19090", "secret": state["api_secret"],
-            "access_control_allow_origin": [f'https://{state["server_ip"]}:8444'],
+            "external_controller": f'127.0.0.1:{state["api_port"]}', "secret": state["api_secret"],
+            "access_control_allow_origin": [f'https://{_public_host(state)}:{state["monitor_port"]}'],
         }}
     return config
 
@@ -233,7 +268,7 @@ def _clash(state: dict) -> dict:
         },
         "proxies": [{
             "name": state["name"], "type": "vless", "server": state["server_ip"],
-            "port": 443, "uuid": state["uuid"], "network": "tcp", "tls": True,
+            "port": state["vpn_port"], "uuid": state["uuid"], "network": "tcp", "tls": True,
             "udp": True, "packet-encoding": "xudp", "flow": "xtls-rprx-vision",
             "servername": state["handshake_host"], "client-fingerprint": "chrome",
             "reality-opts": {
@@ -242,6 +277,7 @@ def _clash(state: dict) -> dict:
         }],
         "proxy-groups": [{"name": group_name, "type": "select", "proxies": [state["name"]]}],
         "rules": [
+            *([f'DOMAIN,{state["public_host"]},DIRECT'] if state["public_host"] else []),
             f'IP-CIDR,{state["server_ip"]}/32,DIRECT,no-resolve',
             "IP-CIDR,127.0.0.0/8,DIRECT,no-resolve", "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve",
             "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve", "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve",
@@ -256,10 +292,49 @@ def _vless(state: dict) -> str:
         "security": "reality", "sni": state["handshake_host"], "fp": "chrome",
         "pbk": state["reality_public_key"], "sid": state["short_id"], "spx": "/",
     }, quote_via=quote)
-    return f'vless://{state["uuid"]}@{state["server_ip"]}:443?{parameters}#{quote(state["name"], safe="")}'
+    return f'vless://{state["uuid"]}@{state["server_ip"]}:{state["vpn_port"]}?{parameters}#{quote(state["name"], safe="")}'
 
 
-def _nginx_prefix() -> str:
+def _nginx_prefix(state: dict) -> str:
+    if state["mode"] == "coexist":
+        return """# Managed by vpnkit. This is an independent nginx configuration.
+user vpnkit;
+worker_processes 1;
+pid /var/lib/vpnkit/nginx/nginx.pid;
+error_log /dev/null crit;
+events { worker_connections 1024; }
+http {
+    types {
+        text/html html;
+        text/css css;
+        application/javascript js mjs;
+        application/json json;
+        image/svg+xml svg;
+        image/png png;
+        image/jpeg jpg jpeg;
+        image/gif gif;
+        image/webp webp;
+        image/x-icon ico;
+        font/woff woff;
+        font/woff2 woff2;
+        font/ttf ttf;
+        application/wasm wasm;
+    }
+    default_type application/octet-stream;
+    client_body_temp_path /var/lib/vpnkit/nginx/client_body;
+    proxy_temp_path /var/lib/vpnkit/nginx/proxy;
+    fastcgi_temp_path /var/lib/vpnkit/nginx/fastcgi;
+    uwsgi_temp_path /var/lib/vpnkit/nginx/uwsgi;
+    scgi_temp_path /var/lib/vpnkit/nginx/scgi;
+    access_log off;
+    server_tokens off;
+    sendfile on;
+    client_max_body_size 1k;
+    map $http_upgrade $vpnkit_connection_upgrade {
+        default upgrade;
+        '' close;
+    }
+"""
     return """# Managed by vpnkit. This is an independent nginx configuration.
 user www-data;
 worker_processes auto;
@@ -296,11 +371,12 @@ def _nginx_acme() -> str:
 
 
 def _nginx_tls(state: dict, port: int) -> str:
+    cert_dir = "/etc/vpnkit/tls" if state["mode"] == "coexist" else "/etc/letsencrypt/live/vpnkit-ip"
     return f"""    server {{
         listen {port} ssl;
-        server_name {state['server_ip']};
-        ssl_certificate /etc/letsencrypt/live/vpnkit-ip/fullchain.pem;
-        ssl_certificate_key /etc/letsencrypt/live/vpnkit-ip/privkey.pem;
+        server_name {_public_host(state)};
+        ssl_certificate {cert_dir}/fullchain.pem;
+        ssl_certificate_key {cert_dir}/privkey.pem;
         ssl_protocols TLSv1.2 TLSv1.3;
         ssl_session_cache shared:VPNKIT:1m;
         ssl_session_timeout 10m;
@@ -313,17 +389,19 @@ def _nginx_tls(state: dict, port: int) -> str:
 
 
 def _nginx(state: dict, with_monitor: bool) -> str:
-    output = _nginx_prefix()
+    output = _nginx_prefix(state)
     if with_monitor:
         # Basic credentials can be cached by a browser. Explicitly reject
         # cross-origin websocket handshakes rather than relying on CORS alone.
         output += f"""    map $http_origin $vpnkit_monitor_origin_allowed {{
         default 0;
         '' 1;
-        'https://{state['server_ip']}:8444' 1;
+        'https://{_public_host(state)}:{state['monitor_port']}' 1;
     }}
 """
-    output += _nginx_acme() + _nginx_tls(state, 8443)
+    if state["mode"] == "standalone":
+        output += _nginx_acme()
+    output += _nginx_tls(state, state["subscription_port"])
     for token, url_filename, disk_filename in (
         (state["clash_token"], "clash.yaml", "clash.yaml"),
         (state["sr_token"], "shadowrocket", "shadowrocket.txt"),
@@ -335,7 +413,7 @@ def _nginx(state: dict, with_monitor: bool) -> str:
 """
     output += "        location / { return 404; }\n    }\n"
     if with_monitor:
-        output += _nginx_tls(state, 8444)
+        output += _nginx_tls(state, state["monitor_port"])
         output += """        auth_basic "VPN Monitor";
         auth_basic_user_file /etc/vpnkit/monitor.htpasswd;
         if ($vpnkit_monitor_origin_allowed = 0) { return 403; }
@@ -348,7 +426,7 @@ def _nginx(state: dict, with_monitor: bool) -> str:
             # without parameters. Connections/logs get safe constant parameters.
             query = fixed_query or "?"
             output += f"""        location = /api/{endpoint} {{
-            proxy_pass http://127.0.0.1:19090/{endpoint}{query};
+            proxy_pass http://127.0.0.1:{state['api_port']}/{endpoint}{query};
             proxy_http_version 1.1;
             proxy_set_header Host 127.0.0.1;
             proxy_set_header Authorization "Bearer {state['api_secret']}";
@@ -376,17 +454,19 @@ def render(state: Mapping, with_monitor: bool = False) -> dict[str, str]:
     clean = validate_state(state)
     direct_vless = _vless(clean)
     urls = {
-        "clash": f'https://{clean["server_ip"]}:8443/sub/{clean["clash_token"]}/clash.yaml',
-        "shadowrocket": f'https://{clean["server_ip"]}:8443/sub/{clean["sr_token"]}/shadowrocket',
+        "clash": f'https://{_public_host(clean)}:{clean["subscription_port"]}/sub/{clean["clash_token"]}/clash.yaml',
+        "shadowrocket": f'https://{_public_host(clean)}:{clean["subscription_port"]}/sub/{clean["sr_token"]}/shadowrocket',
         "direct_vless": direct_vless,
     }
     if with_monitor:
-        urls["monitor"] = f'https://{clean["server_ip"]}:8444/online'
+        urls["monitor"] = f'https://{_public_host(clean)}:{clean["monitor_port"]}/online'
+    nginx = _nginx(clean, with_monitor)
     return {
         "sing-box.json": _json(_sing_box(clean, with_monitor)),
         "clash.yaml": _json(_clash(clean)),
         "shadowrocket.txt": base64.b64encode((direct_vless + "\n").encode()).decode() + "\n",
         "direct-vless.txt": direct_vless + "\n", "urls.json": _json(urls),
-        "nginx.conf": _nginx(clean, with_monitor),
-        "acme-nginx.conf": _nginx_prefix() + _nginx_acme() + "}\n",
+        "nginx.conf": nginx,
+        "acme-nginx.conf": (_nginx_prefix(clean) + _nginx_acme() + "}\n"
+                            if clean["mode"] == "standalone" else nginx),
     }

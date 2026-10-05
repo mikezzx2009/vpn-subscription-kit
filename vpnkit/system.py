@@ -402,6 +402,14 @@ def show_urls():
 
 
 def install(args):
+    metadata_path = ETC / 'install.json'
+    if getattr(args, 'coexist', False) or (metadata_path.is_file() and load_install().get('mode') == 'coexist'):
+        from . import coexist
+        return coexist.install(args)
+    if any(getattr(args, field, None) is not None for field in
+           ('tls_host', 'tls_cert', 'tls_key', 'nginx_binary', 'vpn_port',
+            'subscription_port', 'monitor_port', 'api_port')):
+        raise RuntimeError('External TLS and custom port options require --coexist')
     if not args.accept_acme_tos:
         raise RuntimeError("Add --accept-acme-tos to accept Let's Encrypt terms: https://letsencrypt.org/repository/")
     arch = preflight()
@@ -482,6 +490,9 @@ def install(args):
 
 
 def update_ip(args):
+    if (ETC / 'install.json').is_file() and load_install().get('mode') == 'coexist':
+        from . import coexist
+        return coexist.update_ip(args)
     if not args.accept_acme_tos:
         raise RuntimeError('Add --accept-acme-tos to consent to certificate issuance.')
     preflight()
@@ -508,12 +519,18 @@ def update_ip(args):
 
 
 def status():
+    if (ETC / 'install.json').is_file() and load_install().get('mode') == 'coexist':
+        from . import coexist
+        return coexist.status()
     for unit in ('vpnkit.service', 'vpnkit-web.service', 'vpnkit-renew.timer'):
         result = run(['systemctl', 'is-active', unit], check=False)
         print(f'{unit}: {result.stdout.strip()}')
 
 
 def doctor():
+    if (ETC / 'install.json').is_file() and load_install().get('mode') == 'coexist':
+        from . import coexist
+        return coexist.doctor()
     state = load_state()
     status()
     checks = []
