@@ -366,10 +366,10 @@ class CoexistStackTests(unittest.TestCase):
                     # The website remains directly reachable but is not exposed
                     # as a private destination through the authenticated proxy.
                     blocked = system.run([
-                        "curl", "--silent", "--show-error", "--max-time", "5", "--noproxy", "",
+                        "curl", "--fail", "--silent", "--show-error", "--max-time", "5", "--noproxy", "",
                         "--proxy", "http://127.0.0.1:17892", "http://127.0.0.1/",
                     ], check=False)
-                    self.assertNotEqual(blocked.returncode, 0)
+                    self.assertNotEqual(blocked.returncode, 0, "Proxy must reject the reachable private website")
                     self.assertNotIn(MARKER, blocked.stdout)
                 finally:
                     process.terminate()
